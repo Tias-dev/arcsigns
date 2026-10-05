@@ -40,4 +40,13 @@ function M.diff(path, callback)
   M.run({ 'arc', 'diff', '--git', '--no-color', '-U0', '--', command_path(path) }, vim.fn.fnamemodify(path, ':h'), callback)
 end
 
+function M.commit_summary(path, commit, callback)
+  M.run({ 'arc', 'log', '-n', '1', '--oneline', commit }, vim.fn.fnamemodify(path, ':h'), function(out, err)
+    if err then callback(nil, err); return end
+    local summary = vim.trim((out or ''):match('^[^\n]*') or '')
+    summary = summary:gsub('^%x+%s+', '')
+    callback(summary, nil)
+  end)
+end
+
 return M

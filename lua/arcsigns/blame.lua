@@ -2,6 +2,7 @@ local Arc = require('arcsigns.arc')
 local M = {}
 
 local panel_ns = vim.api.nvim_create_namespace('arcsigns_blame_panel')
+local float_win
 vim.api.nvim_set_hl(0, 'ArcSignsBlameAuthor', { link = 'Identifier', default = true })
 vim.api.nvim_set_hl(0, 'ArcSignsBlameDate', { link = 'Constant', default = true })
 vim.api.nvim_set_hl(0, 'ArcSignsBlameHash', { link = 'Special', default = true })
@@ -48,6 +49,12 @@ function M.open(source, opts)
   Arc.blame(path, opts, function(entries, err)
     if err then vim.notify('Arc blame: ' .. err, vim.log.levels.ERROR); return end
     if not entries or #entries == 0 then vim.notify('Arc returned no blame annotations', vim.log.levels.WARN); return end
+    local unique, pending = {}, 0
+    for _, entry in ipairs(entries) do
+      local commit = tostring(entry.commit or '')
+      if commit ~= '' and not unique[commit] then unique[commit] = true; pending = pending + 1 end
+    end
+    local function continue_render()
     local widths = 0
     for _, e in ipairs(entries) do widths = math.max(widths, vim.fn.strdisplaywidth(tostring(e.author or ''))) end
     vim.api.nvim_set_current_win(source_win)
@@ -113,8 +120,34 @@ function M.open(source, opts)
         local row = math.min(vim.api.nvim_win_get_cursor(source_win)[1], #entries)
         vim.api.nvim_win_set_cursor(panel_win, { row, 0 })
       end
+      local row = vim.api.nvim_win_get_cursor(source_win)[1]
+      local summary = entries[row] and entries[row].summary
+      if summary and summary ~= '' then
+        if float_win and vim.api.nvim_win_is_valid(float_win) then vim.api.nvim_win_close(float_win, true) end
+        local lines = vim.split(summary, '\n', { plain = true })
+        local buf
+        buf, float_win = vim.lsp.util.open_floating_preview(lines, 'text', { focus = false, border = 'rounded', relative = 'cursor', row = 1, col = 0, max_width = 80 })
+        vim.bo[buf].modifiable = false
+      elseif float_win and vim.api.nvim_win_is_valid(float_win) then
+        vim.api.nvim_win_close(float_win, true); float_win = nil
+      end
     end })
     vim.api.nvim_create_autocmd('WinClosed', { pattern = tostring(panel_win), once = true, callback = function() if valid(panel) then vim.api.nvim_buf_delete(panel, { force = true }) end end })
+    vim.api.nvim_create_autocmd({ 'BufWipeout', 'BufHidden' }, { buffer = source, callback = function()
+      if float_win and vim.api.nvim_win_is_valid(float_win) then vim.api.nvim_win_close(float_win, true); float_win = nil end
+    end })
+    vim.api.nvim_exec_autocmds('CursorMoved', { buffer = source, modeline = false })
+    end
+    if pending == 0 then continue_render(); return end
+    for commit in pairs(unique) do
+      Arc.commit_summary(path, commit, function(summary)
+        for _, entry in ipairs(entries) do
+          if tostring(entry.commit or '') == commit then entry.summary = summary or '' end
+        end
+        pending = pending - 1
+        if pending == 0 then continue_render() end
+      end)
+    end
   end)
 end
 
