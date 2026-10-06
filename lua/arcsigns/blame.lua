@@ -2,7 +2,9 @@ local Arc = require("arcsigns.arc")
 local M = {}
 
 local panel_ns = vim.api.nvim_create_namespace("arcsigns_blame_panel")
+local related_ns = vim.api.nvim_create_namespace("arcsigns_blame_related")
 local float_win
+vim.api.nvim_set_hl(0, "ArcSignsBlameRelated", { link = "Visual", default = true })
 vim.api.nvim_set_hl(0, "ArcSignsBlameAuthor", { link = "Identifier", default = true })
 vim.api.nvim_set_hl(0, "ArcSignsBlameDate", { link = "Constant", default = true })
 vim.api.nvim_set_hl(0, "ArcSignsBlameHash", { link = "Special", default = true })
@@ -174,6 +176,18 @@ function M.open(source, opts)
 					return
 				end
 				local row = math.min(vim.api.nvim_win_get_cursor(panel_win)[1], #entries)
+				local commit = tostring(entries[row] and entries[row].commit or "")
+				vim.api.nvim_buf_clear_namespace(source, related_ns, 0, -1)
+				if commit ~= "" then
+					for entry_row, entry in ipairs(entries) do
+						if tostring(entry.commit or "") == commit then
+							vim.api.nvim_buf_set_extmark(source, related_ns, entry_row - 1, 0, {
+								line_hl_group = "ArcSignsBlameRelated",
+								priority = 100,
+							})
+						end
+					end
+				end
 				local summary = group_sizes[row] == 1 and comment_text(entries[row]) or ""
 				if summary ~= "" then
 					if float_win and vim.api.nvim_win_is_valid(float_win) then
@@ -202,6 +216,7 @@ function M.open(source, opts)
 			vim.api.nvim_create_autocmd("CursorMoved", {
 				buffer = source,
 				callback = function()
+					vim.api.nvim_buf_clear_namespace(source, related_ns, 0, -1)
 					if float_win and vim.api.nvim_win_is_valid(float_win) then
 						vim.api.nvim_win_close(float_win, true)
 						float_win = nil
@@ -216,6 +231,7 @@ function M.open(source, opts)
 				pattern = tostring(panel_win),
 				once = true,
 				callback = function()
+					vim.api.nvim_buf_clear_namespace(source, related_ns, 0, -1)
 					if float_win and vim.api.nvim_win_is_valid(float_win) then
 						vim.api.nvim_win_close(float_win, true)
 						float_win = nil
