@@ -21,7 +21,6 @@ local function render(buf, text)
 			vim.api.nvim_buf_set_extmark(buf, M.ns, row, 0, {
 				sign_text = M.config.signs.delete,
 				sign_hl_group = "ArcSignsDelete",
-				line_hl_group = "ArcSignsDeleteLn",
 			})
 		else
 			local hl = h.old_count == 0 and "ArcSignsAddLn" or "ArcSignsChangeLn"
@@ -30,7 +29,6 @@ local function render(buf, text)
 				vim.api.nvim_buf_set_extmark(buf, M.ns, row - 1, 0, {
 					sign_text = sign,
 					sign_hl_group = hl:gsub("Ln$", ""),
-					line_hl_group = M.config.linehl and hl or nil,
 				})
 			end
 		end

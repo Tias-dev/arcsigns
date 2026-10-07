@@ -85,6 +85,11 @@ function M.open(source, opts)
 			end
 		end
 		local function continue_render()
+			local source_scrollbind = vim.wo[source_win].scrollbind
+			local source_wrap = vim.wo[source_win].wrap
+			local source_view = vim.api.nvim_win_call(source_win, function()
+				return vim.fn.winsaveview()
+			end)
 			local widths = 0
 			for _, e in ipairs(entries) do
 				widths = math.max(widths, vim.fn.strdisplaywidth(tostring(e.author or "")))
@@ -98,6 +103,19 @@ function M.open(source, opts)
 			vim.bo[panel].filetype, vim.bo[panel].modifiable = "arcsigns-blame", false
 			vim.wo[panel_win].number, vim.wo[panel_win].relativenumber = false, false
 			vim.wo[panel_win].signcolumn, vim.wo[panel_win].wrap = "no", false
+			vim.wo[source_win].scrollbind = true
+			vim.wo[source_win].wrap = false
+			vim.wo[panel_win].scrollbind = true
+			local source_cursor = vim.api.nvim_win_get_cursor(source_win)
+			vim.api.nvim_win_set_cursor(panel_win, { math.min(source_cursor[1], #entries), 0 })
+			vim.api.nvim_win_call(panel_win, function()
+				vim.fn.winrestview({
+					topline = math.min(source_view.topline or source_cursor[1], #entries),
+					lnum = math.min(source_view.lnum or source_cursor[1], #entries),
+					col = 0,
+					curswant = 0,
+				})
+			end)
 			local lines = {}
 			local graphs = {}
 			local first_lines = {}
@@ -172,7 +190,7 @@ function M.open(source, opts)
 				end
 			end, { buffer = panel, silent = true })
 			local function update_float()
-				if vim.api.nvim_get_current_win() ~= panel_win then
+				if not vim.api.nvim_win_is_valid(panel_win) or vim.api.nvim_get_current_win() ~= panel_win then
 					return
 				end
 				local row = math.min(vim.api.nvim_win_get_cursor(panel_win)[1], #entries)
@@ -216,12 +234,18 @@ function M.open(source, opts)
 			vim.api.nvim_create_autocmd("CursorMoved", {
 				buffer = source,
 				callback = function()
-					vim.api.nvim_buf_clear_namespace(source, related_ns, 0, -1)
+					if valid(source) then
+						vim.api.nvim_buf_clear_namespace(source, related_ns, 0, -1)
+					end
 					if float_win and vim.api.nvim_win_is_valid(float_win) then
 						vim.api.nvim_win_close(float_win, true)
 						float_win = nil
 					end
-					if valid(panel) and vim.api.nvim_win_is_valid(panel_win) then
+					if
+						valid(panel)
+						and vim.api.nvim_win_is_valid(panel_win)
+						and vim.api.nvim_win_is_valid(source_win)
+					then
 						local row = math.min(vim.api.nvim_win_get_cursor(source_win)[1], #entries)
 						vim.api.nvim_win_set_cursor(panel_win, { row, 0 })
 					end
@@ -231,19 +255,26 @@ function M.open(source, opts)
 				pattern = tostring(panel_win),
 				once = true,
 				callback = function()
-					vim.api.nvim_buf_clear_namespace(source, related_ns, 0, -1)
+					if vim.api.nvim_win_is_valid(source_win) then
+						vim.wo[source_win].scrollbind = source_scrollbind
+						vim.wo[source_win].wrap = source_wrap
+					end
+					if valid(source) then
+						vim.api.nvim_buf_clear_namespace(source, related_ns, 0, -1)
+					end
 					if float_win and vim.api.nvim_win_is_valid(float_win) then
 						vim.api.nvim_win_close(float_win, true)
 						float_win = nil
-					end
-					if valid(panel) then
-						vim.api.nvim_buf_delete(panel, { force = true })
 					end
 				end,
 			})
 			vim.api.nvim_create_autocmd({ "BufWipeout", "BufHidden" }, {
 				buffer = source,
 				callback = function()
+					if vim.api.nvim_win_is_valid(source_win) then
+						vim.wo[source_win].scrollbind = source_scrollbind
+						vim.wo[source_win].wrap = source_wrap
+					end
 					if float_win and vim.api.nvim_win_is_valid(float_win) then
 						vim.api.nvim_win_close(float_win, true)
 						float_win = nil
