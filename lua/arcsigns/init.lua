@@ -74,8 +74,6 @@ function M.setup(opts)
 	vim.api.nvim_create_user_command("ArcSignsBlame", function()
 		M.blame()
 	end, {})
-	vim.keymap.set("n", "<leader>ab", "<cmd>ArcSignsBlame<cr>", { silent = true, desc = "Arc blame" })
-	vim.keymap.set("n", "<leader>ar", "<cmd>ArcSignsRefresh<cr>", { silent = true, desc = "Refresh Arc signs" })
 	local group = vim.api.nvim_create_augroup("arcsigns", { clear = true })
 	vim.api.nvim_create_autocmd({ "BufEnter", "BufWritePost", "BufWinEnter" }, {
 		group = group,
